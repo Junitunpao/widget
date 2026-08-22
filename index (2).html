@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Hearts">
+<title>Hearts</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600&display=swap');
+
+  :root{
+    --bg-top:#241627;
+    --bg-bottom:#140c17;
+    --cream:#f5ede4;
+    --cream-dim:#8f8390;
+    --line:rgba(245,237,228,0.08);
+  }
+
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none;}
+
+  html,body{
+    height:100%;
+    margin:0;
+    overflow:hidden;
+    overscroll-behavior:none;
+    background:radial-gradient(120% 90% at 50% 100%, var(--bg-top) 0%, var(--bg-bottom) 60%);
+    font-family:'Inter',sans-serif;
+    color:var(--cream);
+  }
+
+  .screen{
+    position:relative;
+    height:100dvh;
+    width:100%;
+    display:flex;
+    flex-direction:column;
+    padding-top:env(safe-area-inset-top);
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+
+  header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:14px 20px 10px;
+    letter-spacing:0.14em;
+    font-size:0.65rem;
+    color:var(--cream-dim);
+    text-transform:uppercase;
+    flex-shrink:0;
+  }
+
+  main{
+    flex:1;
+    min-height:0;
+    display:flex;
+    flex-direction:column;
+    padding:0 14px;
+    gap:10px;
+  }
+
+  .board{
+    flex:1;
+    min-height:0;
+    display:flex;
+    flex-direction:column;
+    border-radius:20px;
+    background:rgba(245,237,228,0.03);
+    border:1px solid var(--line);
+    overflow:hidden;
+    position:relative;
+  }
+
+  .board-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:10px 14px 4px;
+    flex-shrink:0;
+  }
+
+  .board-name{
+    font-family:'Caveat',cursive;
+    font-size:1.5rem;
+    font-weight:700;
+    background:none;
+    border:none;
+    color:var(--cream);
+    padding:0;
+    width:auto;
+    max-width:60%;
+  }
+
+  .board-name:focus{
+    outline:none;
+    border-bottom:1px solid var(--cream-dim);
+  }
+
+  .board-count{
+    font-size:0.68rem;
+    color:var(--cream-dim);
+  }
+
+  .board canvas{
+    flex:1;
+    width:100%;
+    touch-action:none;
+    display:block;
+  }
+
+  .board-empty{
+    position:absolute;
+    left:50%;
+    top:56%;
+    transform:translate(-50%,-50%);
+    font-size:0.72rem;
+    color:var(--cream-dim);
+    pointer-events:none;
+    text-align:center;
+    opacity:0.7;
+  }
+
+  footer{
+    text-align:center;
+    padding:8px 0 10px;
+    font-size:0.66rem;
+    color:var(--cream-dim);
+    flex-shrink:0;
+  }
+
+  .sync-dot{
+    display:inline-block;
+    width:6px;
+    height:6px;
+    border-radius:50%;
+    background:var(--cream-dim);
+    margin-left:6px;
+    opacity:0.5;
+  }
+  .sync-dot.live{ background:#6fd18f; opacity:1; }
+</style>
+</head>
+<body>
+<div class="screen">
+  <header>
+    <span></span>
+    <span id="dateLabel"></span>
+  </header>
+  <main>
+    <div class="board" id="board-a">
+      <div class="board-head">
+        <input class="board-name" id="name-a" maxlength="16" placeholder="tap to add name" value="Me" />
+        <span class="board-count" id="count-a">0 today</span>
+      </div>
+      <canvas id="canvas-a"></canvas>
+      <div class="board-empty" id="empty-a"></div>
+    </div>
+    <div class="board" id="board-b">
+      <div class="board-head">
+        <input class="board-name" id="name-b" maxlength="16" placeholder="tap to add name" value="You" />
+        <span class="board-count" id="count-b">0 today</span>
+      </div>
+      <canvas id="canvas-b"></canvas>
+      <div class="board-empty" id="empty-b"></div>
+    </div>
+  </main>
+  <footer id="footerStat"><span id="footerText"></span><span class="sync-dot" id="syncDot"></span></footer>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+  // ---- Firebase setup ----
+  const firebaseConfig = {
+    apiKey: "AIzaSyA1YxsWxw0S8e2IoPZEH-n8j4HcHW1ecvs",
+    authDomain: "widget-39347.firebaseapp.com",
+    projectId: "widget-39347",
+    storageBucket: "widget-39347.firebasestorage.app",
+    messagingSenderId: "64183616764",
+    appId: "1:64183616764:web:71600083c5d2ec16070379"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
+  const syncDot = document.getElementById('syncDot');
+  function setLive(isLive){
+    syncDot.classList.toggle('live', isLive);
+  }
+
+  // strokes drawn within this many ms of the previous stroke ending are
+  // treated as the same heart: same color, same count. gives enough time
+  // to lift a finger and draw the second half of a heart as its own stroke.
+  const GROUP_WINDOW_MS = 1800;
+
+  const dateLabel = document.getElementById('dateLabel');
+  dateLabel.textContent = new Date().toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'});
+
+  function todayStr(){
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+
+  function makeId(){
+    return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8);
+  }
+
+  const boardCfg = {
+    a: { palette:['#e8546b','#ff6fa8','#f2a65a'] },
+    b: { palette:['#4fd1c5','#a66cff','#6ea8fe'] }
+  };
+
+  // single source of truth for today's strokes, held locally and merged with
+  // Firestore on every snapshot/save so a slow or offline write never erases
+  // a stroke that is already on screen.
+  const state = { a: [], b: [] };
+  const dayDocRef = db.collection('days').doc(todayStr());
+  const namesDocRef = db.collection('meta').doc('names');
+
+  function mergeById(local, server){
+    const byId = new Map();
+    local.forEach(s => byId.set(s.id, s));
+    server.forEach(s => byId.set(s.id, s));
+    return Array.from(byId.values());
+  }
+
+  function countHearts(id){
+    return new Set(state[id].map(s => s.groupId)).size;
+  }
+
+  // all writes go through one queue so we never fire overlapping transactions
+  let saveChain = Promise.resolve();
+  function queueSave(){
+    saveChain = saveChain.then(save).catch(err => console.warn('hearts: save failed, will retry on next draw', err));
+    return saveChain;
+  }
+
+  async function save(){
+    try{
+      await db.runTransaction(async (tx) => {
+        const doc = await tx.get(dayDocRef);
+        const server = doc.exists ? doc.data() : { a: [], b: [] };
+        const merged = {
+          a: mergeById(state.a, server.a || []),
+          b: mergeById(state.b, server.b || [])
+        };
+        state.a = merged.a;
+        state.b = merged.b;
+        tx.set(dayDocRef, merged);
+      });
+      setLive(true);
+    }catch(err){
+      setLive(false);
+      throw err;
+    }
+  }
+
+  // realtime listener: any change either phone makes shows up here within
+  // about a second, no polling needed.
+  dayDocRef.onSnapshot((doc) => {
+    setLive(true);
+    if (!doc.exists) { renderAll(); return; }
+    const server = doc.data();
+    state.a = mergeById(state.a, server.a || []);
+    state.b = mergeById(state.b, server.b || []);
+    renderAll();
+  }, (err) => {
+    console.warn('hearts: listener error', err);
+    setLive(false);
+  });
+
+  function initName(id){
+    const input = document.getElementById('name-' + id);
+    let ignoreNextSnapshot = false;
+
+    namesDocRef.onSnapshot((doc) => {
+      if (ignoreNextSnapshot) { ignoreNextSnapshot = false; return; }
+      const data = doc.exists ? doc.data() : {};
+      if (data[id] && document.activeElement !== input) input.value = data[id];
+    });
+
+    input.addEventListener('blur', async () => {
+      const val = input.value.trim();
+      if (!val) return;
+      ignoreNextSnapshot = true;
+      try{ await namesDocRef.set({ [id]: val }, { merge: true }); }catch(e){}
+    });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+  }
+
+  const renderers = {};
+
+  function initBoard(id){
+    const cfg = boardCfg[id];
+    const canvas = document.getElementById('canvas-' + id);
+    const countEl = document.getElementById('count-' + id);
+    const emptyEl = document.getElementById('empty-' + id);
+    const ctx = canvas.getContext('2d');
+    let currentStroke = null;
+    let rect = { width: 0, height: 0 };
+
+    // heart grouping: a stroke continues the current heart (same id, same
+    // color) if it starts soon after the previous stroke ended, otherwise
+    // it starts a brand new heart.
+    let groupId = null;
+    let groupColor = null;
+    let lastStrokeEnd = 0;
+
+    function resize(){
+      rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, rect.width * dpr);
+      canvas.height = Math.max(1, rect.height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      render();
+    }
+
+    function drawStroke(stroke){
+      const pts = stroke.points;
+      if (!pts.length) return;
+      ctx.beginPath();
+      ctx.strokeStyle = stroke.color;
+      ctx.lineWidth = 5;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.moveTo(pts[0].x * rect.width, pts[0].y * rect.height);
+      if (pts.length === 1){
+        ctx.lineTo(pts[0].x * rect.width + 0.1, pts[0].y * rect.height + 0.1);
+      } else {
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x * rect.width, pts[i].y * rect.height);
+      }
+      ctx.stroke();
+    }
+
+    function render(){
+      ctx.clearRect(0, 0, rect.width, rect.height);
+      state[id].forEach(drawStroke);
+      if (currentStroke) drawStroke(currentStroke);
+      emptyEl.style.display = state[id].length ? 'none' : 'block';
+      countEl.textContent = countHearts(id) + ' today';
+      updateFooter();
+    }
+    renderers[id] = render;
+
+    function pointFromEvent(e){
+      const r = canvas.getBoundingClientRect();
+      return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+    }
+
+    function pointerDown(e){
+      e.preventDefault();
+      canvas.setPointerCapture(e.pointerId);
+
+      const now = Date.now();
+      if (!groupId || now - lastStrokeEnd > GROUP_WINDOW_MS){
+        groupId = makeId();
+        groupColor = cfg.palette[Math.floor(Math.random() * cfg.palette.length)];
+      }
+
+      currentStroke = { id: makeId(), groupId, color: groupColor, points: [pointFromEvent(e)] };
+      render();
+    }
+
+    function pointerMove(e){
+      if (!currentStroke) return;
+      e.preventDefault();
+      currentStroke.points.push(pointFromEvent(e));
+      render();
+    }
+
+    function pointerUp(e){
+      if (!currentStroke) return;
+      e.preventDefault();
+      state[id].push(currentStroke);
+      lastStrokeEnd = Date.now();
+      currentStroke = null;
+      render();
+      queueSave();
+    }
+
+    canvas.addEventListener('pointerdown', pointerDown);
+    canvas.addEventListener('pointermove', pointerMove);
+    canvas.addEventListener('pointerup', pointerUp);
+    canvas.addEventListener('pointercancel', pointerUp);
+    canvas.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+    canvas.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+    window.addEventListener('resize', resize);
+
+    resize();
+  }
+
+  function renderAll(){
+    Object.values(renderers).forEach(fn => fn());
+  }
+
+  function updateFooter(){
+    const total = countHearts('a') + countHearts('b');
+    document.getElementById('footerText').textContent =
+      total === 0 ? '' : total + (total === 1 ? ' heart today' : ' hearts today');
+  }
+
+  initName('a');
+  initName('b');
+  initBoard('a');
+  initBoard('b');
+</script>
+</body>
+</html>
