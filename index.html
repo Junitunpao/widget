@@ -25,19 +25,47 @@
     margin:0;
     overflow:hidden;
     overscroll-behavior:none;
-    background:radial-gradient(120% 90% at 50% 100%, var(--bg-top) 0%, var(--bg-bottom) 60%);
+    background:var(--bg-bottom);
     font-family:'Inter',sans-serif;
     color:var(--cream);
+    display:flex;
+    align-items:center;
+    justify-content:center;
   }
 
+  /*
+    The screen is locked to a standard iPhone size (430 x 932, the point
+    size of the largest current iPhones). On a phone at or under that
+    size, width:100% and height:100dvh just fill the real screen like
+    before. On a bigger screen such as an iPad, max-width and max-height
+    stop it from stretching, so the drawing boxes stay the exact same
+    shape everywhere. That is what keeps a heart drawn on one device
+    from looking squeezed or stretched on another, since each stroke is
+    stored as a fraction of the box size.
+  */
   .screen{
     position:relative;
     height:100dvh;
+    max-height:932px;
     width:100%;
+    max-width:430px;
     display:flex;
     flex-direction:column;
     padding-top:env(safe-area-inset-top);
     padding-bottom:env(safe-area-inset-bottom);
+    background:radial-gradient(120% 90% at 50% 100%, var(--bg-top) 0%, var(--bg-bottom) 60%);
+    overflow:hidden;
+  }
+
+  /* Round the corners and add a shadow only when the screen is actually
+     floating inside a bigger viewport, i.e. on iPad or desktop. At or
+     under the standard phone size this never applies, so the phone
+     experience is pixel identical to before. */
+  @media (min-width:431px), (min-height:933px){
+    .screen{
+      border-radius:44px;
+      box-shadow:0 30px 90px rgba(0,0,0,0.55);
+    }
   }
 
   header{
