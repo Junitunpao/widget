@@ -34,21 +34,21 @@
   }
 
   /*
-    The screen is locked to a standard iPhone size (430 x 932, the point
-    size of the largest current iPhones). On a phone at or under that
-    size, width:100% and height:100dvh just fill the real screen like
-    before. On a bigger screen such as an iPad, max-width and max-height
-    stop it from stretching, so the drawing boxes stay the exact same
-    shape everywhere. That is what keeps a heart drawn on one device
-    from looking squeezed or stretched on another, since each stroke is
-    stored as a fraction of the box size.
+    The screen's width is tied to its height by a fixed ratio (430:932,
+    a standard iPhone shape) instead of being capped to a fixed size.
+    That means it always fills the full height of whatever device it's
+    on, phone or tablet, with no dead space top or bottom. On a screen
+    that's wider for its height than that ratio, like an iPad, the extra
+    room lands on the sides instead, so the drawing boxes stay the exact
+    same shape everywhere. That is what keeps a heart drawn on one
+    device from looking squeezed or stretched on another, since each
+    stroke is stored as a fraction of the box size.
   */
   .screen{
     position:relative;
     height:100dvh;
-    max-height:932px;
-    width:100%;
-    max-width:430px;
+    aspect-ratio: 430 / 932;
+    max-width:100%;
     display:flex;
     flex-direction:column;
     padding-top:env(safe-area-inset-top);
@@ -57,15 +57,13 @@
     overflow:hidden;
   }
 
-  /* Round the corners and add a shadow only when the screen is actually
-     floating inside a bigger viewport, i.e. on iPad or desktop. At or
-     under the standard phone size this never applies, so the phone
-     experience is pixel identical to before. */
-  @media (min-width:431px), (min-height:933px){
-    .screen{
-      border-radius:44px;
-      box-shadow:0 30px 90px rgba(0,0,0,0.55);
-    }
+  /* On a screen the box exactly fills, these are invisible since there's
+     no room around them to see. On a wider screen where the box is
+     pillarboxed, they make it read as a floating card instead of a
+     stretched or cut-off box. */
+  .screen{
+    border-radius:44px;
+    box-shadow:0 30px 90px rgba(0,0,0,0.55);
   }
 
   header{
@@ -264,6 +262,19 @@
     return saveChain;
   }
 
+  // clears one board only, for today. Goes through the same queue as
+  // save() so it can't be undone by a save that was already in flight
+  // and would otherwise merge the old strokes back in.
+  function clearBoard(id){
+    saveChain = saveChain.then(async () => {
+      state[id] = [];
+      renderAll();
+      await dayDocRef.set({ [id]: [] }, { merge: true });
+      setLive(true);
+    }).catch(err => { setLive(false); console.warn('hearts: clear failed', err); });
+    return saveChain;
+  }
+
   async function save(){
     try{
       await db.runTransaction(async (tx) => {
@@ -414,6 +425,36 @@
     canvas.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
     canvas.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
     window.addEventListener('resize', resize);
+
+    // hidden clear gesture: press and hold the "X today" count for about
+    // a second and a half to wipe that board. No button, nothing visible
+    // until you actually hold it, just a faint fade while you do.
+    const HOLD_MS = 1400;
+    let holdTimer = null;
+    function holdStart(e){
+      e.preventDefault();
+      if (holdTimer) return;
+      countEl.style.transition = 'opacity ' + HOLD_MS + 'ms linear';
+      countEl.style.opacity = '0.15';
+      holdTimer = setTimeout(() => {
+        holdTimer = null;
+        countEl.style.transition = 'opacity 200ms ease';
+        countEl.style.opacity = '';
+        if (navigator.vibrate) navigator.vibrate(40);
+        clearBoard(id);
+      }, HOLD_MS);
+    }
+    function holdCancel(){
+      if (!holdTimer) return;
+      clearTimeout(holdTimer);
+      holdTimer = null;
+      countEl.style.transition = 'opacity 200ms ease';
+      countEl.style.opacity = '';
+    }
+    countEl.addEventListener('pointerdown', holdStart);
+    countEl.addEventListener('pointerup', holdCancel);
+    countEl.addEventListener('pointerleave', holdCancel);
+    countEl.addEventListener('pointercancel', holdCancel);
 
     resize();
   }
