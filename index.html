@@ -34,21 +34,16 @@
   }
 
   /*
-    The screen's width is tied to its height by a fixed ratio (430:932,
-    a standard iPhone shape) instead of being capped to a fixed size.
-    That means it always fills the full height of whatever device it's
-    on, phone or tablet, with no dead space top or bottom. On a screen
-    that's wider for its height than that ratio, like an iPad, the extra
-    room lands on the sides instead, so the drawing boxes stay the exact
-    same shape everywhere. That is what keeps a heart drawn on one
-    device from looking squeezed or stretched on another, since each
-    stroke is stored as a fraction of the box size.
+    The screen's size is set in JavaScript (see fitScreen below), not
+    here in CSS. It fills the full device height and derives the width
+    from a fixed 430:932 ratio, so it always uses the whole screen with
+    no dead space, and only ever pillarboxes on the sides on a wider
+    screen like an iPad. That is what keeps a heart drawn on one device
+    from looking squeezed or stretched on another, since each stroke is
+    stored as a fraction of the box size.
   */
   .screen{
     position:relative;
-    height:100dvh;
-    aspect-ratio: 430 / 932;
-    max-width:100%;
     display:flex;
     flex-direction:column;
     padding-top:env(safe-area-inset-top);
@@ -214,6 +209,28 @@
   function setLive(isLive){
     syncDot.classList.toggle('live', isLive);
   }
+
+  // Sizes the screen exactly in pixels: full device height, width from
+  // a fixed 430:932 ratio, capped so it never runs wider than the real
+  // screen. Runs in JS instead of CSS aspect-ratio, which Safari won't
+  // reliably compute for a flex item that's also being centered.
+  const screenEl = document.querySelector('.screen');
+  const PHONE_W = 430, PHONE_H = 932;
+  function fitScreen(){
+    const vh = window.innerHeight;
+    const vw = window.innerWidth;
+    let h = vh;
+    let w = h * (PHONE_W / PHONE_H);
+    if (w > vw){
+      w = vw;
+      h = w * (PHONE_H / PHONE_W);
+    }
+    screenEl.style.height = h + 'px';
+    screenEl.style.width = w + 'px';
+  }
+  fitScreen();
+  window.addEventListener('resize', fitScreen);
+  window.addEventListener('orientationchange', fitScreen);
 
   // strokes drawn within this many ms of the previous stroke ending are
   // treated as the same heart: same color, same count. gives enough time
@@ -426,20 +443,25 @@
     canvas.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
     window.addEventListener('resize', resize);
 
-    // hidden clear gesture: press and hold the "X today" count for about
-    // a second and a half to wipe that board. No button, nothing visible
-    // until you actually hold it, just a faint fade while you do.
+    // hidden clear gesture: press and hold anywhere in this board's
+    // header strip (name or count) for about a second and a half to
+    // wipe the board. No button, nothing visible until you hold it,
+    // just a faint fade while you do. Bound to the whole strip rather
+    // than just the count text, since that was too small a target to
+    // hold steady on for over a second.
+    const headEl = document.querySelector('#board-' + id + ' .board-head');
+    const nameInput = document.getElementById('name-' + id);
     const HOLD_MS = 1400;
     let holdTimer = null;
     function holdStart(e){
-      e.preventDefault();
+      if (e.target === nameInput) return; // let normal tap-to-rename happen
       if (holdTimer) return;
-      countEl.style.transition = 'opacity ' + HOLD_MS + 'ms linear';
-      countEl.style.opacity = '0.15';
+      headEl.style.transition = 'opacity ' + HOLD_MS + 'ms linear';
+      headEl.style.opacity = '0.25';
       holdTimer = setTimeout(() => {
         holdTimer = null;
-        countEl.style.transition = 'opacity 200ms ease';
-        countEl.style.opacity = '';
+        headEl.style.transition = 'opacity 200ms ease';
+        headEl.style.opacity = '';
         if (navigator.vibrate) navigator.vibrate(40);
         clearBoard(id);
       }, HOLD_MS);
@@ -448,13 +470,13 @@
       if (!holdTimer) return;
       clearTimeout(holdTimer);
       holdTimer = null;
-      countEl.style.transition = 'opacity 200ms ease';
-      countEl.style.opacity = '';
+      headEl.style.transition = 'opacity 200ms ease';
+      headEl.style.opacity = '';
     }
-    countEl.addEventListener('pointerdown', holdStart);
-    countEl.addEventListener('pointerup', holdCancel);
-    countEl.addEventListener('pointerleave', holdCancel);
-    countEl.addEventListener('pointercancel', holdCancel);
+    headEl.addEventListener('pointerdown', holdStart);
+    headEl.addEventListener('pointerup', holdCancel);
+    headEl.addEventListener('pointerleave', holdCancel);
+    headEl.addEventListener('pointercancel', holdCancel);
 
     resize();
   }
