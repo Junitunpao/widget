@@ -37,16 +37,13 @@
   }
 
   /*
-    Pure CSS sizing, no JavaScript involved. Height is the real dynamic
-    viewport height. Width is derived directly from that height using a
-    fixed 430:932 ratio via calc(), capped at the actual screen width
-    with min(). This fills the full device height with no dead space,
-    and only ever pillarboxes on the sides on a wider screen like an
-    iPad, which is what keeps a heart drawn on one device from looking
-    squeezed or stretched on another, since each stroke is stored as a
-    fraction of the box size. Doing this in CSS instead of JavaScript
-    means it can't get stuck on a stale reading from the moment the app
-    launched, which is what was happening in standalone/home-screen mode.
+    This is the immediate fallback, applied instantly on paint before any
+    JavaScript runs. On a normal Safari tab it's correct on its own. In
+    standalone/home-screen mode on some iOS versions, dvh itself reports
+    the wrong height, a real platform bug, not something fixable in CSS
+    alone. See fitScreen() in the script below, which measures the true
+    size with the visualViewport API and corrects this inline once the
+    script runs.
   */
   .screen{
     position:relative;
@@ -79,7 +76,7 @@
     min-height:0;
     display:flex;
     flex-direction:column;
-    padding:0 14px;
+    padding:0 6px;
     gap:10px;
   }
 
@@ -99,7 +96,7 @@
     display:flex;
     justify-content:space-between;
     align-items:center;
-    padding:10px 14px 4px;
+    padding:10px 10px 4px;
     flex-shrink:0;
   }
 
@@ -210,6 +207,37 @@
   function setLive(isLive){
     syncDot.classList.toggle('live', isLive);
   }
+
+  // Corrects the screen's size using the visualViewport API, which
+  // reports the true visible area even on iOS versions where dvh is
+  // wrong in standalone/home-screen mode. Runs right away, then again
+  // on the next couple of frames and a couple of short delays, since
+  // standalone launches can settle their real size a moment after the
+  // page first paints. Also re-runs on any resize, rotation, or return
+  // to the app, so it never gets stuck on a bad reading.
+  const screenEl = document.querySelector('.screen');
+  const PHONE_W = 430, PHONE_H = 932;
+  function fitScreen(){
+    const vv = window.visualViewport;
+    const vh = vv ? vv.height : window.innerHeight;
+    const vw = vv ? vv.width : window.innerWidth;
+    let h = vh;
+    let w = h * (PHONE_W / PHONE_H);
+    if (w > vw){
+      w = vw;
+      h = w * (PHONE_H / PHONE_W);
+    }
+    screenEl.style.height = h + 'px';
+    screenEl.style.width = w + 'px';
+  }
+  fitScreen();
+  requestAnimationFrame(() => requestAnimationFrame(fitScreen));
+  setTimeout(fitScreen, 300);
+  setTimeout(fitScreen, 1000);
+  window.addEventListener('resize', fitScreen);
+  window.addEventListener('orientationchange', fitScreen);
+  window.addEventListener('pageshow', fitScreen);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', fitScreen);
 
   // strokes drawn within this many ms of the previous stroke ending are
   // treated as the same heart: same color, same count. gives enough time
