@@ -37,29 +37,27 @@
   }
 
   /*
-    The screen's size is set in JavaScript (see fitScreen below), not
-    here in CSS. It fills the full device height and derives the width
-    from a fixed 430:932 ratio, so it always uses the whole screen with
-    no dead space, and only ever pillarboxes on the sides on a wider
-    screen like an iPad. That is what keeps a heart drawn on one device
-    from looking squeezed or stretched on another, since each stroke is
-    stored as a fraction of the box size.
+    Pure CSS sizing, no JavaScript involved. Height is the real dynamic
+    viewport height. Width is derived directly from that height using a
+    fixed 430:932 ratio via calc(), capped at the actual screen width
+    with min(). This fills the full device height with no dead space,
+    and only ever pillarboxes on the sides on a wider screen like an
+    iPad, which is what keeps a heart drawn on one device from looking
+    squeezed or stretched on another, since each stroke is stored as a
+    fraction of the box size. Doing this in CSS instead of JavaScript
+    means it can't get stuck on a stale reading from the moment the app
+    launched, which is what was happening in standalone/home-screen mode.
   */
   .screen{
     position:relative;
+    height:100dvh;
+    width:min(100vw, calc(100dvh * 430 / 932));
     display:flex;
     flex-direction:column;
     padding-top:env(safe-area-inset-top);
     padding-bottom:env(safe-area-inset-bottom);
     background:radial-gradient(120% 90% at 50% 100%, var(--bg-top) 0%, var(--bg-bottom) 60%);
     overflow:hidden;
-  }
-
-  /* On a screen the box exactly fills, these are invisible since there's
-     no room around them to see. On a wider screen where the box is
-     pillarboxed, they make it read as a floating card instead of a
-     stretched or cut-off box. */
-  .screen{
     border-radius:44px;
     box-shadow:0 30px 90px rgba(0,0,0,0.55);
   }
@@ -212,28 +210,6 @@
   function setLive(isLive){
     syncDot.classList.toggle('live', isLive);
   }
-
-  // Sizes the screen exactly in pixels: full device height, width from
-  // a fixed 430:932 ratio, capped so it never runs wider than the real
-  // screen. Runs in JS instead of CSS aspect-ratio, which Safari won't
-  // reliably compute for a flex item that's also being centered.
-  const screenEl = document.querySelector('.screen');
-  const PHONE_W = 430, PHONE_H = 932;
-  function fitScreen(){
-    const vh = window.innerHeight;
-    const vw = window.innerWidth;
-    let h = vh;
-    let w = h * (PHONE_W / PHONE_H);
-    if (w > vw){
-      w = vw;
-      h = w * (PHONE_H / PHONE_W);
-    }
-    screenEl.style.height = h + 'px';
-    screenEl.style.width = w + 'px';
-  }
-  fitScreen();
-  window.addEventListener('resize', fitScreen);
-  window.addEventListener('orientationchange', fitScreen);
 
   // strokes drawn within this many ms of the previous stroke ending are
   // treated as the same heart: same color, same count. gives enough time
