@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Hearts">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -197,6 +198,8 @@
   <footer id="footerStat"><span id="footerText"></span><span class="sync-dot" id="syncDot"></span></footer>
 </div>
 
+<pre id="debugPanel" style="position:fixed; left:6px; bottom:6px; z-index:99999; margin:0; background:rgba(0,0,0,0.9); color:#5CFF7A; font:10px/1.4 'SF Mono', Menlo, monospace; padding:5px 8px; border-radius:6px; pointer-events:none;"></pre>
+
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
@@ -216,6 +219,22 @@
   function setLive(isLive){
     syncDot.classList.toggle('live', isLive);
   }
+
+  // Minimal diagnostic, to be removed once confirmed. Just the one
+  // number that matters: is .screen actually reaching the true screen
+  // height now, or is there still a gap in the CSS calculation itself.
+  const debugPanel = document.getElementById('debugPanel');
+  function updateDebug(){
+    const r = document.querySelector('.screen').getBoundingClientRect();
+    debugPanel.textContent =
+      'standalone=' + window.navigator.standalone +
+      '  screen.rect H=' + r.height.toFixed(1) +
+      '  true screen.h=' + window.screen.height +
+      '  diff=' + (window.screen.height - r.height).toFixed(1);
+  }
+  updateDebug();
+  setTimeout(updateDebug, 500);
+  window.addEventListener('resize', updateDebug);
 
   // strokes drawn within this many ms of the previous stroke ending are
   // treated as the same heart: same color, same count. gives enough time
