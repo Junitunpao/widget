@@ -76,7 +76,7 @@
     min-height:0;
     display:flex;
     flex-direction:column;
-    padding:0 6px;
+    padding:0 4px;
     gap:10px;
   }
 
@@ -188,6 +188,8 @@
   <footer id="footerStat"><span id="footerText"></span><span class="sync-dot" id="syncDot"></span></footer>
 </div>
 
+<pre id="debugPanel" style="position:fixed; left:6px; right:6px; bottom:6px; z-index:99999; margin:0; background:rgba(0,0,0,0.88); color:#5CFF7A; font:10px/1.5 'SF Mono', Menlo, monospace; padding:8px 10px; border-radius:8px; white-space:pre-wrap; pointer-events:none;"></pre>
+
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
@@ -207,6 +209,30 @@
   function setLive(isLive){
     syncDot.classList.toggle('live', isLive);
   }
+
+  // Diagnostic only, to be removed once we know what's actually
+  // happening on the device. Prints the real numbers the browser is
+  // reporting, not what we assume they should be.
+  const debugPanel = document.getElementById('debugPanel');
+  let debugTicks = 0;
+  function updateDebug(){
+    const vv = window.visualViewport;
+    const sRect = screenEl.getBoundingClientRect();
+    const bRect = document.body.getBoundingClientRect();
+    const standalone = window.matchMedia('(display-mode: standalone)').matches;
+    debugPanel.textContent =
+      't=' + (debugTicks++) + '  standalone=' + standalone + '\n' +
+      'innerH/W: ' + window.innerHeight + ' / ' + window.innerWidth + '\n' +
+      'vv H/W: ' + (vv ? vv.height.toFixed(1) : 'n/a') + ' / ' + (vv ? vv.width.toFixed(1) : 'n/a') +
+        (vv ? '  offsetTop=' + vv.offsetTop.toFixed(1) : '') + '\n' +
+      'docEl clientH/W: ' + document.documentElement.clientHeight + ' / ' + document.documentElement.clientWidth + '\n' +
+      'screen.h/w: ' + window.screen.height + ' / ' + window.screen.width + '  dpr=' + window.devicePixelRatio + '\n' +
+      'body rect H/W: ' + bRect.height.toFixed(1) + ' / ' + bRect.width.toFixed(1) + '\n' +
+      '.screen rect H/W: ' + sRect.height.toFixed(1) + ' / ' + sRect.width.toFixed(1) + '  top=' + sRect.top.toFixed(1) + '\n' +
+      '.screen style H/W: ' + screenEl.style.height + ' / ' + screenEl.style.width;
+  }
+  const debugTimer = setInterval(updateDebug, 400);
+  setTimeout(() => clearInterval(debugTimer), 8000);
 
   // Corrects the screen's size using the visualViewport API, which
   // reports the true visible area even on iOS versions where dvh is
@@ -229,6 +255,7 @@
     }
     screenEl.style.height = h + 'px';
     screenEl.style.width = w + 'px';
+    updateDebug();
   }
   fitScreen();
   requestAnimationFrame(() => requestAnimationFrame(fitScreen));
