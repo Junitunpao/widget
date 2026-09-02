@@ -214,14 +214,20 @@
   // happening on the device. Prints the real numbers the browser is
   // reporting, not what we assume they should be.
   const debugPanel = document.getElementById('debugPanel');
+  const safeProbe = document.createElement('div');
+  safeProbe.style.cssText = 'position:fixed; top:0; left:0; height:0; padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom); visibility:hidden;';
+  document.body.appendChild(safeProbe);
   let debugTicks = 0;
   function updateDebug(){
     const vv = window.visualViewport;
     const sRect = screenEl.getBoundingClientRect();
     const bRect = document.body.getBoundingClientRect();
-    const standalone = window.matchMedia('(display-mode: standalone)').matches;
+    const mm = window.matchMedia('(display-mode: standalone)').matches;
+    const ns = window.navigator.standalone;
+    const safeCS = getComputedStyle(safeProbe);
     debugPanel.textContent =
-      't=' + (debugTicks++) + '  standalone=' + standalone + '\n' +
+      't=' + (debugTicks++) + '  navigator.standalone=' + ns + '  matchMedia=' + mm + '\n' +
+      'safe-area top/bottom: ' + safeCS.paddingTop + ' / ' + safeCS.paddingBottom + '\n' +
       'innerH/W: ' + window.innerHeight + ' / ' + window.innerWidth + '\n' +
       'vv H/W: ' + (vv ? vv.height.toFixed(1) : 'n/a') + ' / ' + (vv ? vv.width.toFixed(1) : 'n/a') +
         (vv ? '  offsetTop=' + vv.offsetTop.toFixed(1) : '') + '\n' +
