@@ -10,6 +10,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Hearts</title>
+<script>if (window.navigator.standalone) document.documentElement.classList.add('standalone');</script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600&display=swap');
 
@@ -37,13 +38,16 @@
   }
 
   /*
-    This is the immediate fallback, applied instantly on paint before any
-    JavaScript runs. On a normal Safari tab it's correct on its own. In
-    standalone/home-screen mode on some iOS versions, dvh itself reports
-    the wrong height, a real platform bug, not something fixable in CSS
-    alone. See fitScreen() in the script below, which measures the true
-    size with the visualViewport API and corrects this inline once the
-    script runs.
+    dvh is correct in a normal Safari tab, it shrinks to fit above
+    Safari's own toolbar. But on this device, in standalone/home-screen
+    mode, dvh (and innerHeight, and visualViewport) all get stuck
+    reporting a height that's short of the true screen by a fixed
+    amount, confirmed by direct on-device testing. Plain vh/lvh read
+    correctly in that same standalone context, but they run too tall in
+    a Safari tab, extending behind its toolbar. Neither works
+    everywhere alone, so .standalone (set from navigator.standalone,
+    the reliable iOS-specific flag, in the tiny inline script in <head>)
+    switches to the one that's actually correct for each context.
   */
   .screen{
     position:relative;
@@ -57,6 +61,11 @@
     overflow:hidden;
     border-radius:44px;
     box-shadow:0 30px 90px rgba(0,0,0,0.55);
+  }
+
+  html.standalone .screen{
+    height:100lvh;
+    width:min(100vw, calc(100lvh * 430 / 932));
   }
 
   header{
@@ -188,8 +197,6 @@
   <footer id="footerStat"><span id="footerText"></span><span class="sync-dot" id="syncDot"></span></footer>
 </div>
 
-<pre id="debugPanel" style="position:fixed; left:6px; right:6px; bottom:6px; z-index:99999; margin:0; background:rgba(0,0,0,0.9); color:#5CFF7A; font:9px/1.4 'SF Mono', Menlo, monospace; padding:6px 8px; border-radius:8px; white-space:pre-wrap; pointer-events:none;"></pre>
-
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
@@ -209,88 +216,6 @@
   function setLive(isLive){
     syncDot.classList.toggle('live', isLive);
   }
-
-  // Diagnostic only, to be removed once we know what's actually
-  // happening on the device. Prints the real numbers the browser is
-  // reporting, not what we assume they should be.
-  const debugPanel = document.getElementById('debugPanel');
-  const safeProbe = document.createElement('div');
-  safeProbe.style.cssText = 'position:fixed; top:0; left:0; height:0; padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom); visibility:hidden;';
-  document.body.appendChild(safeProbe);
-
-  // Four different ways of asking for "full height", to see which one
-  // (if any) actually escapes the capped reading.
-  const vhProbe = document.createElement('div');
-  vhProbe.style.cssText = 'position:fixed; top:-99999px; height:100vh; visibility:hidden;';
-  const svhProbe = document.createElement('div');
-  svhProbe.style.cssText = 'position:fixed; top:-99999px; height:100svh; visibility:hidden;';
-  const lvhProbe = document.createElement('div');
-  lvhProbe.style.cssText = 'position:fixed; top:-99999px; height:100lvh; visibility:hidden;';
-  const fixedProbe = document.createElement('div');
-  fixedProbe.style.cssText = 'position:fixed; inset:0; visibility:hidden;';
-  document.body.appendChild(vhProbe);
-  document.body.appendChild(svhProbe);
-  document.body.appendChild(lvhProbe);
-  document.body.appendChild(fixedProbe);
-
-  let debugTicks = 0;
-  function updateDebug(){
-    const vv = window.visualViewport;
-    const sRect = screenEl.getBoundingClientRect();
-    const bRect = document.body.getBoundingClientRect();
-    const mm = window.matchMedia('(display-mode: standalone)').matches;
-    const ns = window.navigator.standalone;
-    const safeCS = getComputedStyle(safeProbe);
-    debugPanel.textContent =
-      't=' + (debugTicks++) + '  navigator.standalone=' + ns + '  matchMedia=' + mm + '\n' +
-      'safe-area top/bottom: ' + safeCS.paddingTop + ' / ' + safeCS.paddingBottom + '\n' +
-      'innerH/W: ' + window.innerHeight + ' / ' + window.innerWidth + '\n' +
-      'vv H/W: ' + (vv ? vv.height.toFixed(1) : 'n/a') + ' / ' + (vv ? vv.width.toFixed(1) : 'n/a') +
-        (vv ? '  offsetTop=' + vv.offsetTop.toFixed(1) : '') + '\n' +
-      'docEl clientH/W: ' + document.documentElement.clientHeight + ' / ' + document.documentElement.clientWidth + '\n' +
-      'screen.h/w: ' + window.screen.height + ' / ' + window.screen.width + '  dpr=' + window.devicePixelRatio + '\n' +
-      'body rect H/W: ' + bRect.height.toFixed(1) + ' / ' + bRect.width.toFixed(1) + '\n' +
-      '.screen rect H/W: ' + sRect.height.toFixed(1) + ' / ' + sRect.width.toFixed(1) + '  top=' + sRect.top.toFixed(1) + '\n' +
-      '.screen style H/W: ' + screenEl.style.height + ' / ' + screenEl.style.width + '\n' +
-      '100vh probe: ' + vhProbe.getBoundingClientRect().height.toFixed(1) + '\n' +
-      '100svh probe: ' + svhProbe.getBoundingClientRect().height.toFixed(1) + '\n' +
-      '100lvh probe: ' + lvhProbe.getBoundingClientRect().height.toFixed(1) + '\n' +
-      'fixed inset:0 probe H/W: ' + fixedProbe.getBoundingClientRect().height.toFixed(1) + ' / ' + fixedProbe.getBoundingClientRect().width.toFixed(1);
-  }
-  const debugTimer = setInterval(updateDebug, 400);
-  setTimeout(() => clearInterval(debugTimer), 8000);
-
-  // Corrects the screen's size using the visualViewport API, which
-  // reports the true visible area even on iOS versions where dvh is
-  // wrong in standalone/home-screen mode. Runs right away, then again
-  // on the next couple of frames and a couple of short delays, since
-  // standalone launches can settle their real size a moment after the
-  // page first paints. Also re-runs on any resize, rotation, or return
-  // to the app, so it never gets stuck on a bad reading.
-  const screenEl = document.querySelector('.screen');
-  const PHONE_W = 430, PHONE_H = 932;
-  function fitScreen(){
-    const vv = window.visualViewport;
-    const vh = vv ? vv.height : window.innerHeight;
-    const vw = vv ? vv.width : window.innerWidth;
-    let h = vh;
-    let w = h * (PHONE_W / PHONE_H);
-    if (w > vw){
-      w = vw;
-      h = w * (PHONE_H / PHONE_W);
-    }
-    screenEl.style.height = h + 'px';
-    screenEl.style.width = w + 'px';
-    updateDebug();
-  }
-  fitScreen();
-  requestAnimationFrame(() => requestAnimationFrame(fitScreen));
-  setTimeout(fitScreen, 300);
-  setTimeout(fitScreen, 1000);
-  window.addEventListener('resize', fitScreen);
-  window.addEventListener('orientationchange', fitScreen);
-  window.addEventListener('pageshow', fitScreen);
-  if (window.visualViewport) window.visualViewport.addEventListener('resize', fitScreen);
 
   // strokes drawn within this many ms of the previous stroke ending are
   // treated as the same heart: same color, same count. gives enough time
